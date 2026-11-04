@@ -13,19 +13,20 @@ yarn db:deploy          # aplica as migrations
 yarn start:dev          # http://localhost:3333/api
 ```
 
-Na primeira subida a API cria o catálogo inicial (grades de tamanho e moldes) se ainda não existir.
+Na primeira subida (tabelas vazias) a API cria o catálogo inicial de grades de tamanho e moldes; depois disso o catálogo é seu — um molde excluído não volta no reinício.
 Nada além disso é pré-cadastrado.
 
 ## Endpoints
 
 `GET/POST /orders` · `GET /orders/summary` · `GET/PATCH /orders/:id` · `PATCH /orders/:id/status`
-`GET/POST /clients` · `GET/POST /responsibles` · `GET/POST /molds` · `GET /size-grids`
+`GET/POST /clients` · `GET/POST /responsibles` · `GET/POST /molds` · `DELETE /molds/:id` · `GET /size-grids`
 
 ## Regras
 
 - **Prioridade**: menos de 7 dias → URGENTE (≥ 50 peças) ou ALTA · 7–14 dias → MÉDIA · mais de 14 → BAIXA (`src/common/priority.ts`).
 - **Data de entrega**: data inexistente é recusada; data passada só é aceita com `allowPastDate: true`
   (na edição, só se a data foi alterada).
+- **Molde**: só pode ser excluído se nunca foi usado em pedido e não tem variações (409 com mensagem explicando).
 - **Cliente**: CPF/CNPJ válido e único, ao menos uma forma de contato.
 - **Responsável**: nome, CPF válido e único e telefone com DDD obrigatórios.
 - **Dados preservados**: pedido referencia cliente e responsável com `ON DELETE RESTRICT` — concluir ou alterar um

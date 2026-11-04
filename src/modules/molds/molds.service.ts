@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { toGrid, toMold } from '../../common/mappers.js';
 import type { Mold, MoldCategory, SizeGrid } from '../../common/types.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -34,5 +34,19 @@ export class MoldsService {
         hasSizes: dto.hasSizes ?? false, variationOfId: dto.variationOfId, notes: dto.notes,
       },
     }));
+  }
+
+  /** Só exclui moldes que não foram usados em nenhum pedido e não têm variações (o histórico nunca é alterado). */
+  async remove(id: string): Promise<{ id: string }> {
+    const mold = await this.prisma.mold.findUnique({ where: { id }, include: { variations: { select: { name: true } } } });
+    if (!mold) throw new NotFoundException('Molde não encontrado');
+    if (mold.variations.length) {
+      throw new ConflictException(`Este molde tem variações (${mold.variations.map((v) => v.name).join(', ')}). Exclua as variações primeiro.`);
+    }
+    if (await this.prisma.orderItem.count({ where: { moldId: id } })) {
+      throw new ConflictException('Este molde já foi usado em pedidos e não pode ser excluído.');
+    }
+    await this.prisma.mold.delete({ where: { id } });
+    return { id };
   }
 }

@@ -22,11 +22,18 @@ const MOLDS = [
   { id: 'm-bolsa-gabinete', category: 'OUTRO', name: 'Bolsa para gabinete' },
 ] as const;
 
-/** Idempotente: só cria o que ainda não existe, nunca sobrescreve o que o usuário alterou. */
+/**
+ * Semeia o catálogo inicial só quando as tabelas estão vazias (primeira subida).
+ * Assim, um molde excluído pelo usuário não reaparece a cada reinício da API.
+ */
 export async function ensureCatalog(prisma: PrismaClient) {
-  await prisma.sizeGrid.createMany({ data: GRIDS.map((g, position) => ({ ...g, position })), skipDuplicates: true });
-  // moldes-base antes das variações (FK de variationOfId)
-  for (const m of [...MOLDS].sort((a, b) => Number('variationOfId' in a) - Number('variationOfId' in b))) {
-    await prisma.mold.createMany({ data: [{ ...m, models: [...('models' in m ? m.models : [])], gridIds: [...('gridIds' in m ? m.gridIds : [])] }], skipDuplicates: true });
+  if ((await prisma.sizeGrid.count()) === 0) {
+    await prisma.sizeGrid.createMany({ data: GRIDS.map((g, position) => ({ ...g, position })), skipDuplicates: true });
+  }
+  if ((await prisma.mold.count()) === 0) {
+    // moldes-base antes das variações (FK de variationOfId)
+    for (const m of [...MOLDS].sort((a, b) => Number('variationOfId' in a) - Number('variationOfId' in b))) {
+      await prisma.mold.create({ data: { ...m, models: [...('models' in m ? m.models : [])], gridIds: [...('gridIds' in m ? m.gridIds : [])] } });
+    }
   }
 }
