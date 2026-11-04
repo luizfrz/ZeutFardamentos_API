@@ -1,0 +1,19 @@
+# dependências e builds
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Prisma (gerado por `prisma generate`)
+/src/generated/
+
+# ambiente
+.env
+.env.*
+!.env.example
+
+# sistema / editor
+.DS_Store
+*.log
+.idea/
+.vscode/
