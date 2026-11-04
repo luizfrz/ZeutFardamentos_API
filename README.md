@@ -28,8 +28,8 @@ Nada além disso é pré-cadastrado.
 - **Data de entrega**: data inexistente é recusada; data passada só é aceita com `allowPastDate: true`
   (na edição, só se a data foi alterada).
 - **Molde**: só pode ser excluído se nunca foi usado em pedido e não tem variações (409 com mensagem explicando).
-- **Cliente**: CPF/CNPJ válido e único, ao menos uma forma de contato.
-- **Responsável**: nome, CPF válido e único e telefone com DDD obrigatórios.
+- **Cliente**: ao menos uma forma de contato. **CNPJ** (empresa/órgão público) é obrigatório, válido e único; **CPF** (pessoa física) é opcional, mas se informado precisa ser válido e único.
+- **Responsável**: nome e telefone com DDD obrigatórios; **CPF opcional** (se informado, válido e único).
 - **Dados preservados**: pedido referencia cliente e responsável com `ON DELETE RESTRICT` — concluir ou alterar um
   pedido nunca remove o cliente, e o banco impede apagar um cliente que já tem pedido.
 
@@ -114,7 +114,7 @@ Proteções: não dá para excluir a própria conta nem rebaixar/excluir o últi
 `yarn user:create [--admin] [--reset]` (interativo; a senha não aparece na tela).
 
 - **Limite de tentativas**: 5 erros por IP+e-mail a cada 15 min no login (em memória, por instância).
-- **Migrations** (`add_users`, `add_user_role`): em produção rode `yarn db:migrate:neon` **antes** de publicar a API.
+- **Migrations** (`add_users`, `add_user_role`, `optional_cpf`): em produção rode `yarn db:migrate:neon` **antes** de publicar a API.
 - Ordem de publicação: migration → primeiro admin → `JWT_SECRET` na Vercel → API → front.
 
 ## Solução de problemas
