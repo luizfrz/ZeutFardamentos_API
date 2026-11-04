@@ -22,16 +22,25 @@ function describeError(e: unknown): string {
   return parts.join(' | ');
 }
 
+/** Classe curta e sem segredos do erro, segura para expor no /api/health. */
+export function classifyError(e: unknown): string {
+  const err = e as { message?: string; meta?: { driverAdapterError?: { cause?: { kind?: string; originalCode?: string } } } };
+  if (err?.message?.startsWith('DATABASE_URL não definida')) return 'DATABASE_URL_MISSING';
+  const cause = err?.meta?.driverAdapterError?.cause;
+  if (cause?.kind === 'AuthenticationFailed' || cause?.originalCode === '28P01') return 'DB_AUTH_FAILED';
+  if (cause?.kind === 'DatabaseNotReachable') return 'DB_UNREACHABLE';
+  if (/Não foi possível conectar ao PostgreSQL/.test(err?.message ?? '')) return 'DB_UNREACHABLE';
+  return 'DB_ERROR';
+}
+
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
   private readonly pool: pg.Pool;
+  /** Motivo (sem dados sensíveis) pelo qual o banco não ficou pronto; usado pelo /api/health. */
+  dbProblem: string | null = null;
 
   constructor() {
-    if (!process.env.DATABASE_URL) {
-      // Sem isso o pg tenta o localhost e a requisição fica presa até estourar o tempo.
-      throw new Error('DATABASE_URL não definida. Configure a variável de ambiente (na Vercel: Settings → Environment Variables).');
-    }
     // Pool próprio: em serverless cada instância deve segurar poucas conexões (DB_POOL_MAX, padrão 5).
     const pool = new pg.Pool({
       connectionString: process.env.DATABASE_URL,
@@ -46,8 +55,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   async onModuleInit() {
     await this.attachToVercel();
-    await this.waitForDatabase();
-    await ensureCatalog(this);
+    try {
+      if (!process.env.DATABASE_URL) {
+        throw new Error('DATABASE_URL não definida. Configure a variável de ambiente (na Vercel: Settings → Environment Variables).');
+      }
+      await this.waitForDatabase();
+      await ensureCatalog(this);
+    } catch (e) {
+      this.dbProblem = classifyError(e);
+      this.logger.error(`Banco não ficou pronto (${this.dbProblem}): ${describeError(e)}`);
+      // Local: falha ao iniciar, como antes. Serverless: a API sobe mesmo assim, para /api/ping e /api/health
+      // conseguirem dizer o que está errado (em vez de a função morrer sem resposta).
+      if (!ON_VERCEL) throw e;
+    }
   }
 
   async onModuleDestroy() {
