@@ -19,6 +19,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       connectionString: process.env.DATABASE_URL,
       max: Number(process.env.DB_POOL_MAX ?? 5),
       idleTimeoutMillis: 10_000,
+      // Neon/Supabase gratuitos "dormem" quando ociosos: o 1º acesso pode levar alguns segundos para acordar.
+      connectionTimeoutMillis: 15_000,
     });
     super({ adapter: new PrismaPg(pool) });
     this.pool = pool;

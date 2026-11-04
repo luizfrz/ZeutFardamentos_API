@@ -51,6 +51,46 @@ prisma/                       schema.prisma + migrations
 
 Scripts de banco: `db:migrate` (dev), `db:deploy`, `db:studio`, `db:reset`.
 
+## Deploy na Vercel
+
+A Vercel roda NestJS sem configuração (detecta `src/main.ts`; a API vira uma Vercel Function). O que muda é o banco:
+precisa ser um PostgreSQL externo — o container local não existe lá.
+
+1. **Banco (Neon)**: no painel da Vercel, *Storage → Neon (Marketplace)*, ou em neon.com → *New Project* (região próxima de você,
+   ex.: *São Paulo*). Em *Connect* copie **duas** URLs: a **com pooler** (host com `-pooler`) e a **direta**.
+   Antes de ir para a Vercel, confirme que as duas funcionam e crie o schema, direto da sua máquina:
+   ```bash
+   DATABASE_URL='<url com pooler>' DIRECT_DATABASE_URL='<url direta>' yarn db:check   # testa a conexão (não imprime senha)
+   DIRECT_DATABASE_URL='<url direta>' yarn db:deploy                                  # cria as tabelas
+   ```
+   No plano gratuito o Neon suspende o banco quando ocioso: o primeiro acesso depois de um tempo pode levar alguns segundos.
+2. **Projeto**: *Add New → Project* → importe este repositório (preset *NestJS*, detectado sozinho).
+3. **Não altere** *Build Command*, *Output Directory* nem *Install Command* (Settings → Build and Deployment): para NestJS a Vercel
+   configura tudo sozinha, e um override faz o deploy sair "vazio" (todas as rotas respondem `NOT_FOUND`).
+   *Framework Preset* deve ser **NestJS** e *Root Directory* vazio. As migrations **não** rodam no build — veja o passo 1
+   (`yarn db:deploy` da sua máquina, sempre que houver migration nova).
+4. **Variáveis de ambiente**:
+   - `DATABASE_URL` = URL com pooler (`?sslmode=require`)
+   - `DIRECT_DATABASE_URL` = URL direta (só para as migrations)
+   - `WEB_ORIGIN` = URL do front (várias separadas por vírgula)
+   - `DB_POOL_MAX` = `5` (opcional)
+5. **Conferir**: `https://SEU-PROJETO-API.vercel.app/api/health` deve responder `{"status":"ok"}`.
+
+**Usando Supabase em vez do Neon** (também é só um PostgreSQL para a API; o NestJS continua rodando na Vercel):
+
+| Variável | Valor (painel do Supabase → *Connect*) |
+|---|---|
+| `DATABASE_URL` | *Transaction pooler* (porta **6543**) |
+| `DIRECT_DATABASE_URL` | *Session pooler* (porta **5432**) — a conexão "direct" só tem IPv6 sem o add-on de IPv4 |
+
+Troque `[YOUR-PASSWORD]` pela senha do banco. Não testado contra um projeto Supabase real.
+
+Em serverless cada instância segura poucas conexões (`DB_POOL_MAX`) e o pool é registrado com `attachDatabasePool`
+(`@vercel/functions`) para liberar conexões quando a função é suspensa — por isso a URL do pooler é obrigatória.
+
+> ⚠️ A API **não tem autenticação**: quem souber a URL lê e altera clientes (CPF/CNPJ, telefones) e pedidos.
+> Proteja antes de divulgar (login, ou proteção de deploy da Vercel/firewall).
+
 ## Solução de problemas
 
 **`ECONNREFUSED` ao iniciar / front mostra "Não foi possível carregar os dados"** — o PostgreSQL não está rodando.
