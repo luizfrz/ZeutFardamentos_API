@@ -3,5 +3,8 @@
   "framework": "nestjs",
   "buildCommand": null,
   "outputDirectory": null,
-  "installCommand": null
+  "installCommand": null,
+  "regions": [
+    "gru1"
+  ]
 }
