@@ -6,16 +6,16 @@ const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 export const toDbDate = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
 export const toClient = (c: {
-  id: string; type: Client['type']; name: string; document: string; address: unknown;
+  id: string; type: Client['type']; name: string; document: string | null; address: unknown;
   contacts: { kind: Contact['kind']; value: string; ownerName: string | null; ownerDocument: string | null }[];
 }): Client => ({
-  id: c.id, type: c.type, name: c.name, document: c.document,
+  id: c.id, type: c.type, name: c.name, document: nn(c.document),
   contacts: c.contacts.map((x) => ({ kind: x.kind, value: x.value, ownerName: nn(x.ownerName), ownerDocument: nn(x.ownerDocument) })),
   address: nn(c.address) as Client['address'],
 });
 
-export const toResponsible = (r: { id: string; name: string; cpf: string; phone: string }): Responsible =>
-  ({ id: r.id, name: r.name, cpf: r.cpf, phone: r.phone });
+export const toResponsible = (r: { id: string; name: string; cpf: string | null; phone: string }): Responsible =>
+  ({ id: r.id, name: r.name, cpf: nn(r.cpf), phone: r.phone });
 
 export const toGrid = (g: { id: string; name: string; description: string; sizes: string[] }): SizeGrid =>
   ({ id: g.id, name: g.name, description: g.description, sizes: g.sizes });

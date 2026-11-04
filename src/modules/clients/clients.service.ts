@@ -7,7 +7,8 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 export interface CreateClientDto {
   type: ClientType;
   name: string;
-  document: string;
+  /** CPF (opcional, pessoa física) ou CNPJ (obrigatório para empresa e órgão público). */
+  document?: string;
   contacts: Contact[];
   address?: Address;
 }
@@ -38,8 +39,12 @@ export class ClientsService {
     const errors: string[] = [];
     if (!dto.name?.trim()) errors.push('Nome / Razão social é obrigatório');
     const doc = normalizeDocument(dto.document ?? '');
-    if (dto.type === 'PF' ? !isValidCpf(doc) : !isValidCnpj(doc)) {
-      errors.push(dto.type === 'PF' ? 'CPF inválido' : 'CNPJ inválido: os dígitos verificadores não conferem');
+    if (dto.type === 'PF') {
+      if (doc && !isValidCpf(doc)) errors.push('CPF inválido');
+    } else if (!doc) {
+      errors.push('CNPJ é obrigatório para empresa e órgão público');
+    } else if (!isValidCnpj(doc)) {
+      errors.push('CNPJ inválido: os dígitos verificadores não conferem');
     }
     if (doc && (await this.prisma.client.findUnique({ where: { document: doc } }))) errors.push('Já existe um cliente com este documento');
     if (!dto.contacts?.length || dto.contacts.some((c) => !c.value?.trim())) errors.push('Informe pelo menos uma forma de contato');
@@ -48,7 +53,7 @@ export class ClientsService {
 
     const created = await this.prisma.client.create({
       data: {
-        type: dto.type, name: dto.name.trim(), document: doc,
+        type: dto.type, name: dto.name.trim(), document: doc || null,
         address: dto.address ? { ...dto.address } : undefined,
         contacts: {
           create: dto.contacts.map((c, position) => ({

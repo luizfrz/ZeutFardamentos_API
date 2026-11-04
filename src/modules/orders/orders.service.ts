@@ -71,7 +71,7 @@ export class OrdersService {
           `#${o.number}`.includes(t) ||
           o.client.name.toLowerCase().includes(t) ||
           o.responsible.name.toLowerCase().includes(t) ||
-          (d && (o.client.document.includes(d) || o.responsible.cpf.includes(d))),
+          (d && (o.client.document?.includes(d) || o.responsible.cpf?.includes(d))),
       );
     }
     const sort = query.sort ?? 'priority';

@@ -26,7 +26,7 @@ export interface Client {
   id: string;
   type: ClientType;
   name: string;
-  document: string;
+  document?: string;
   contacts: Contact[];
   address?: Address;
 }
@@ -34,7 +34,7 @@ export interface Client {
 export interface Responsible {
   id: string;
   name: string;
-  cpf: string;
+  cpf?: string;
   phone: string;
 }
 

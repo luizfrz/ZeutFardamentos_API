@@ -35,7 +35,7 @@ model Client {
   id        String     @id @default(uuid())
   type      ClientType
   name      String
-  document  String     @unique
+  document  String?    @unique // CPF é opcional (pessoa física); CNPJ é obrigatório para empresa/órgão (validado na API)
   address   Json?
   createdAt DateTime   @default(now())
 
@@ -60,7 +60,7 @@ model Contact {
 model Responsible {
   id        String   @id @default(uuid())
   name      String
-  cpf       String   @unique
+  cpf       String?  @unique // opcional
   phone     String
   createdAt DateTime @default(now())
 

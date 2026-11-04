@@ -17,15 +17,17 @@ export class ResponsiblesService {
     return rows.map(toResponsible);
   }
 
-  async create(dto: { name: string; cpf: string; phone: string }): Promise<Responsible> {
+  async create(dto: { name: string; cpf?: string; phone: string }): Promise<Responsible> {
     const cpf = normalizeDocument(dto.cpf ?? '');
     const errors: string[] = [];
     if (!dto.name?.trim()) errors.push('Nome é obrigatório');
-    if (!isValidCpf(cpf)) errors.push('CPF inválido');
-    else if (await this.prisma.responsible.findUnique({ where: { cpf } })) errors.push('Já existe um responsável com este CPF');
+    if (cpf) {
+      if (!isValidCpf(cpf)) errors.push('CPF inválido');
+      else if (await this.prisma.responsible.findUnique({ where: { cpf } })) errors.push('Já existe um responsável com este CPF');
+    }
     if (!dto.phone?.trim()) errors.push('Telefone é obrigatório');
     else if (!isValidPhone(dto.phone)) errors.push('Telefone inválido: informe DDD + número');
     if (errors.length) throw new BadRequestException(errors);
-    return toResponsible(await this.prisma.responsible.create({ data: { name: dto.name.trim(), cpf, phone: dto.phone.trim() } }));
+    return toResponsible(await this.prisma.responsible.create({ data: { name: dto.name.trim(), cpf: cpf || null, phone: dto.phone.trim() } }));
   }
 }
