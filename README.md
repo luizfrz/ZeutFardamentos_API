@@ -53,8 +53,9 @@ Scripts de banco: `db:migrate` (dev), `db:deploy`, `db:studio`, `db:reset`.
 
 ## Deploy na Vercel
 
-A Vercel roda NestJS sem configuração (detecta `src/main.ts`; a API vira uma Vercel Function). O que muda é o banco:
-precisa ser um PostgreSQL externo — o container local não existe lá.
+A API roda na Vercel como **uma função serverless** (`api/index.js` → `dist/serverless.js`), configurada em `vercel.json`
+(framework *Other*, `buildCommand: yarn build`, região `gru1`, todas as rotas reescritas para a função). O Nest é iniciado uma vez
+por instância e reaproveitado. O banco precisa ser um PostgreSQL externo — o container local não existe lá.
 
 1. **Banco (Neon)**: no painel da Vercel, *Storage → Neon (Marketplace)*, ou em neon.com → *New Project* (região próxima de você,
    ex.: *São Paulo*). Em *Connect* copie **duas** URLs: a **com pooler** (host com `-pooler`) e a **direta**.
@@ -65,16 +66,16 @@ precisa ser um PostgreSQL externo — o container local não existe lá.
    ```
    No plano gratuito o Neon suspende o banco quando ocioso: o primeiro acesso depois de um tempo pode levar alguns segundos.
 2. **Projeto**: *Add New → Project* → importe este repositório (preset *NestJS*, detectado sozinho).
-3. **Não altere** *Build Command*, *Output Directory* nem *Install Command* (Settings → Build and Deployment): para NestJS a Vercel
-   configura tudo sozinha, e um override faz o deploy sair "vazio" (todas as rotas respondem `NOT_FOUND`).
-   *Framework Preset* deve ser **NestJS** e *Root Directory* vazio. As migrations **não** rodam no build — veja o passo 1
-   (`yarn db:deploy` da sua máquina, sempre que houver migration nova).
+3. **Não sobrescreva** *Build Command*, *Output Directory* nem *Install Command* no painel: o `vercel.json` já define tudo.
+   As migrations **não** rodam no build — veja o passo 1 (`yarn db:migrate:neon` da sua máquina, a cada migration nova).
 4. **Variáveis de ambiente**:
    - `DATABASE_URL` = URL com pooler (`?sslmode=require`)
    - `DIRECT_DATABASE_URL` = URL direta (só para as migrations)
    - `WEB_ORIGIN` = URL do front (várias separadas por vírgula)
    - `DB_POOL_MAX` = `5` (opcional)
-5. **Conferir**: `https://SEU-PROJETO-API.vercel.app/api/health` deve responder `{"status":"ok"}`.
+5. **Conferir**: `https://SEU-PROJETO-API.vercel.app/api/ping` (não usa banco) deve responder `{"ok":true,…}` e
+   `/api/health` deve responder `{"status":"ok"}`. Se o banco falhar, `/api/health` devolve 503 com `reason` (`DATABASE_URL_MISSING`,
+   `DB_AUTH_FAILED`, `DB_UNREACHABLE`) e o log da função mostra a causa.
 
 **Usando Supabase em vez do Neon** (também é só um PostgreSQL para a API; o NestJS continua rodando na Vercel):
 
