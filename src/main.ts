@@ -10,4 +10,10 @@ async function bootstrap() {
   app.enableCors({ origin: origins });
   await app.listen(process.env.PORT ?? 3333);
 }
-await bootstrap();
+try {
+  await bootstrap();
+} catch (e) {
+  // Garante que a causa real apareça nos logs (Vercel → Logs), em vez de só "500".
+  console.error('[bootstrap] falha ao iniciar a API:', e instanceof Error ? (e.stack ?? e.message) : e);
+  throw e;
+}

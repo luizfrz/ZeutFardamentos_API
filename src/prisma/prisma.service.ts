@@ -12,6 +12,16 @@ const RETRY_DELAY_MS = ON_VERCEL ? 500 : 2000;
 const CONNECT_TIMEOUT_MS = ON_VERCEL ? 6000 : 15_000;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** O Prisma embrulha o erro do driver (P2010 etc.): extrai a causa real sem imprimir a URL de conexão. */
+function describeError(e: unknown): string {
+  const err = e as { code?: string; name?: string; message?: string; meta?: unknown; cause?: { code?: string; message?: string; name?: string } };
+  const parts = [err.code ?? err.name ?? 'erro'];
+  if (err.message) parts.push(err.message.split('\n')[0].slice(0, 200));
+  if (err.cause) parts.push(`causa: ${err.cause.code ?? err.cause.name ?? ''} ${err.cause.message ?? ''}`.trim());
+  if (err.meta) parts.push(`meta: ${JSON.stringify(err.meta).slice(0, 300)}`);
+  return parts.join(' | ');
+}
+
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
@@ -63,7 +73,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         await this.$queryRaw`SELECT 1`;
         if (attempt > 1) this.logger.log('Conexão com o PostgreSQL estabelecida.');
         return;
-      } catch {
+      } catch (e) {
+        this.logger.warn(`Tentativa ${attempt}/${MAX_ATTEMPTS} falhou: ${describeError(e)}`);
         if (attempt === 1) {
           this.logger.warn(
             ON_VERCEL
