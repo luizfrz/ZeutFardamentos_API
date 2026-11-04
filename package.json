@@ -27,7 +27,11 @@
     "db:reset": "prisma migrate reset",
     "db:check": "node scripts/check-db.mjs",
     "db:migrate:neon": "node scripts/migrate-remote.mjs",
-    "db:check:neon": "node --env-file=.env.neon scripts/check-db.mjs"
+    "db:check:neon": "node --env-file=.env.neon scripts/check-db.mjs",
+    "user:create": "node scripts/create-user.mjs",
+    "user:create:neon": "node --env-file=.env.neon scripts/create-user.mjs",
+    "user:admin": "node scripts/create-user.mjs --admin --from-admin-file",
+    "user:admin:neon": "node --env-file=.env.neon scripts/create-user.mjs --admin --from-admin-file"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -37,6 +41,7 @@
     "@prisma/client": "^7.10.1",
     "@vercel/functions": "^3.10.6",
     "dotenv": "^18.0.9",
+    "jose": "^6.2.15",
     "pg": "^8.23.1",
     "prisma": "^7.10.1",
     "reflect-metadata": "^0.2.2",

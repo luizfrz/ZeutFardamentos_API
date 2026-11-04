@@ -18,6 +18,7 @@ Nada além disso é pré-cadastrado.
 
 ## Endpoints
 
+`POST /auth/login` (pública) · `GET /auth/me` · `GET/POST/PATCH/DELETE /users` (só admin) — as demais rotas exigem `Authorization: Bearer <token>`
 `GET/POST /orders` · `GET /orders/summary` · `GET/PATCH /orders/:id` · `PATCH /orders/:id/status`
 `GET/POST /clients` · `GET/POST /responsibles` · `GET/POST /molds` · `DELETE /molds/:id` · `GET /size-grids`
 
@@ -89,8 +90,32 @@ Troque `[YOUR-PASSWORD]` pela senha do banco. Não testado contra um projeto Sup
 Em serverless cada instância segura poucas conexões (`DB_POOL_MAX`) e o pool é registrado com `attachDatabasePool`
 (`@vercel/functions`) para liberar conexões quando a função é suspensa — por isso a URL do pooler é obrigatória.
 
-> ⚠️ A API **não tem autenticação**: quem souber a URL lê e altera clientes (CPF/CNPJ, telefones) e pedidos.
-> Proteja antes de divulgar (login, ou proteção de deploy da Vercel/firewall).
+## Autenticação
+
+Toda rota exige login (`Authorization: Bearer <JWT>`), exceto `/auth/login`, `/health` e `/ping`. **Não há cadastro público:** só um
+**administrador** cria contas (tela *Usuários* do site ou `POST /users`). Senhas com `scrypt` (sal por usuário); sessão = JWT HS256 de 7 dias
+assinado com `JWT_SECRET` (mín. 32 caracteres; sem ele a API recusa tudo com 503 `AUTH_NOT_CONFIGURED`). E-mail inexistente e senha errada
+dão a mesma mensagem, no mesmo tempo.
+
+| Papel | Pode |
+|---|---|
+| `USER` | Usar o sistema (clientes, responsáveis, pedidos, moldes) |
+| `ADMIN` | Tudo isso + `GET/POST/PATCH/DELETE /users` (criar, redefinir senha, mudar papel, excluir). O papel é conferido **no banco** a cada chamada, não só no token. |
+
+Proteções: não dá para excluir a própria conta nem rebaixar/excluir o último administrador.
+
+| Variável | Para quê |
+|---|---|
+| `JWT_SECRET` | Segredo que assina as sessões. Gere: `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
+
+### Primeiro administrador
+`yarn build && yarn user:admin` (banco local) ou `yarn user:admin:neon` (produção) cria o admin com e-mail e senha do arquivo `.env.admin`
+(gerado, modo 600, ignorado pelo git — **apague depois de trocar a senha** em *Usuários → Redefinir senha*). Para outro usuário:
+`yarn user:create [--admin] [--reset]` (interativo; a senha não aparece na tela).
+
+- **Limite de tentativas**: 5 erros por IP+e-mail a cada 15 min no login (em memória, por instância).
+- **Migrations** (`add_users`, `add_user_role`): em produção rode `yarn db:migrate:neon` **antes** de publicar a API.
+- Ordem de publicação: migration → primeiro admin → `JWT_SECRET` na Vercel → API → front.
 
 ## Solução de problemas
 
