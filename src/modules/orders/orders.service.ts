@@ -31,6 +31,17 @@ type OrderRow = Prisma.OrderGetPayload<{ include: typeof include }>;
 
 const today = () => new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
 
+/** Endereço público de um arquivo do Vercel Blob (https://<loja>.public.blob.vercel-storage.com/...). */
+const isBlobUrl = (u: unknown): boolean => {
+  if (typeof u !== 'string' || u.length > 500) return false;
+  try {
+    const url = new URL(u);
+    return url.protocol === 'https:' && url.hostname.endsWith('.public.blob.vercel-storage.com');
+  } catch {
+    return false;
+  }
+};
+
 @Injectable()
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -116,6 +127,11 @@ export class OrdersService {
     const moldIds = [...new Set((dto.items ?? []).map((i) => i.moldId))];
     const found = await this.prisma.mold.findMany({ where: { id: { in: moldIds } }, select: { id: true } });
     for (const id of moldIds.filter((m) => !found.some((f) => f.id === m))) errors.push(`Molde inválido: ${id}`);
+    // Fotos: só endereços https do Vercel Blob (o valor vira src/href no site; nada de javascript: ou sites de terceiros)
+    if (dto.images !== undefined) {
+      if (!Array.isArray(dto.images) || dto.images.length > 8) errors.push('Envie no máximo 8 imagens');
+      else if (!dto.images.every(isBlobUrl)) errors.push('Endereço de imagem inválido');
+    }
     if (errors.length) throw new BadRequestException(errors);
   }
 
