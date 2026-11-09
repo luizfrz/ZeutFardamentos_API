@@ -38,11 +38,11 @@ export const toOrderItem = (i: {
 
 export const toOrder = (o: {
   id: string; number: number; name: string; description: string | null; clientId: string; responsibleId: string;
-  deliveryDate: Date; status: Order['status']; createdAt: Date; deliveredAt: Date | null; links: unknown; images: string[];
+  deliveryDate: Date; status: Order['status']; createdAt: Date; deliveredAt: Date | null; links: unknown; images: string[]; totalValue: number | null;
   items: Parameters<typeof toOrderItem>[0][];
 }): Order => ({
   id: o.id, number: o.number, name: o.name, description: nn(o.description), clientId: o.clientId, responsibleId: o.responsibleId,
   deliveryDate: isoDate(o.deliveryDate), status: o.status, createdAt: isoDate(o.createdAt),
   deliveredAt: o.deliveredAt ? isoDate(o.deliveredAt) : undefined,
-  items: o.items.map(toOrderItem), links: (o.links as Order['links']) ?? [], images: o.images,
+  items: o.items.map(toOrderItem), links: (o.links as Order['links']) ?? [], images: o.images, totalValue: nn(o.totalValue),
 });

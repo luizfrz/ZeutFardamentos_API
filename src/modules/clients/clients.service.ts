@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { isValidCnpj, isValidCpf, normalizeDocument } from '../../common/document.js';
 import { toClient } from '../../common/mappers.js';
 import type { Address, Client, ClientType, Contact } from '../../common/types.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
 export interface CreateClientDto {
@@ -64,5 +65,15 @@ export class ClientsService {
       include,
     });
     return toClient(created);
+  }
+
+  /** Endereço é opcional: sem `address` (ou vazio), o endereço é removido. */
+  async setAddress(id: string, address?: Address): Promise<Client> {
+    if (!(await this.prisma.client.count({ where: { id } }))) throw new NotFoundException('Cliente não encontrado');
+    const filled = address && Object.values(address).some((v) => typeof v === 'string' && v.trim());
+    const c = await this.prisma.client.update({
+      where: { id }, data: { address: filled ? { ...address } : Prisma.DbNull }, include,
+    });
+    return toClient(c);
   }
 }

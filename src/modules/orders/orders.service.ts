@@ -24,6 +24,7 @@ export const itemPieces = (i: OrderItem) =>
 
 const include = {
   items: { orderBy: { position: 'asc' as const } },
+  payments: { orderBy: [{ paidAt: 'asc' as const }, { createdAt: 'asc' as const }] },
   client: { include: { contacts: { orderBy: { position: 'asc' as const } } } },
   responsible: true,
 };
@@ -50,8 +51,13 @@ export class OrdersService {
     const o = toOrder(row);
     const pieces = o.items.reduce((s, i) => s + itemPieces(i), 0);
     const daysLeft = daysUntil(o.deliveryDate);
+    const payments = row.payments.map((p) => ({ id: p.id, amount: p.amount, paidAt: p.paidAt.toISOString().slice(0, 10) }));
+    const paidTotal = payments.reduce((s, p) => s + p.amount, 0);
     return {
       ...o,
+      payments,
+      paidTotal,
+      paymentStatus: o.totalValue ? (paidTotal >= o.totalValue ? 'PAGO' : 'PENDENTE') : undefined,
       totalPieces: pieces,
       daysLeft,
       deadlineLevel: deadlineLevel(daysLeft),
@@ -132,6 +138,7 @@ export class OrdersService {
       if (!Array.isArray(dto.images) || dto.images.length > 8) errors.push('Envie no máximo 8 imagens');
       else if (!dto.images.every(isBlobUrl)) errors.push('Endereço de imagem inválido');
     }
+    if (dto.totalValue != null && !(Number.isInteger(dto.totalValue) && dto.totalValue > 0)) errors.push('Valor total inválido');
     if (errors.length) throw new BadRequestException(errors);
   }
 
@@ -147,7 +154,7 @@ export class OrdersService {
     const created = await this.prisma.order.create({
       data: {
         name: dto.name.trim(), description: dto.description, clientId: dto.clientId, responsibleId: dto.responsibleId,
-        deliveryDate: toDbDate(dto.deliveryDate), links: (dto.links ?? []) as unknown as Prisma.InputJsonValue, images: dto.images ?? [],
+        deliveryDate: toDbDate(dto.deliveryDate), links: (dto.links ?? []) as unknown as Prisma.InputJsonValue, images: dto.images ?? [], totalValue: dto.totalValue ?? null,
         items: { create: this.itemsData(dto.items) },
       },
       include,
@@ -173,7 +180,7 @@ export class OrdersService {
         data: {
           name: changes.name?.trim(), description: changes.description, clientId: changes.clientId, responsibleId: changes.responsibleId,
           deliveryDate: changes.deliveryDate ? toDbDate(changes.deliveryDate) : undefined,
-          links: changes.links ? (changes.links as unknown as Prisma.InputJsonValue) : undefined, images: changes.images,
+          links: changes.links ? (changes.links as unknown as Prisma.InputJsonValue) : undefined, images: changes.images, totalValue: changes.totalValue,
         },
         include,
       });
@@ -188,5 +195,25 @@ export class OrdersService {
       where: { id }, data: { status, deliveredAt: status === 'CONCLUIDO' ? today() : null }, include,
     });
     return this.view(o);
+  }
+
+  async addPayment(id: string, amount: number, paidAt?: string) {
+    const o = await this.prisma.order.findUnique({ where: { id }, include });
+    if (!o) throw new NotFoundException('Pedido não encontrado');
+    const date = paidAt ?? new Date().toISOString().slice(0, 10);
+    const errors: string[] = [];
+    if (!Number.isInteger(amount) || amount <= 0) errors.push('Valor do pagamento inválido');
+    if (!isRealDate(date)) errors.push('Data do pagamento inválida');
+    if (!o.totalValue) errors.push('Informe o valor total do pedido antes de registrar pagamentos');
+    else if (o.payments.reduce((s, p) => s + p.amount, 0) + amount > o.totalValue) errors.push('A soma dos pagamentos ultrapassa o valor total do pedido');
+    if (errors.length) throw new BadRequestException(errors);
+    await this.prisma.payment.create({ data: { orderId: id, amount, paidAt: toDbDate(date) } });
+    return this.get(id);
+  }
+
+  async removePayment(id: string, paymentId: string) {
+    const { count } = await this.prisma.payment.deleteMany({ where: { id: paymentId, orderId: id } });
+    if (!count) throw new NotFoundException('Pagamento não encontrado');
+    return this.get(id);
   }
 }

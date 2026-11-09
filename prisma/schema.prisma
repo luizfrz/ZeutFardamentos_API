@@ -105,11 +105,13 @@ model Order {
   deliveredAt   DateTime?   @db.Date
   links         Json        @default("[]")
   images        String[]
+  totalValue    Int? // em centavos; opcional
 
   // Restrict: apagar um pedido nunca apaga o cliente, e um cliente com pedidos não pode ser apagado.
   client      Client      @relation(fields: [clientId], references: [id], onDelete: Restrict)
   responsible Responsible @relation(fields: [responsibleId], references: [id], onDelete: Restrict)
   items       OrderItem[]
+  payments    Payment[]
 
   @@index([status, deliveryDate])
   @@index([clientId])
@@ -127,6 +129,18 @@ model OrderItem {
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   mold  Mold  @relation(fields: [moldId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  orderId   String
+  amount    Int // centavos
+  paidAt    DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
