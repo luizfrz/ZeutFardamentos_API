@@ -10,20 +10,14 @@ export function daysUntil(isoDate: string, today = new Date()): number {
 }
 
 /**
- * Prioridade = prazo de entrega + quantidade de peças.
- *  - menos de 7 dias: URGENTE se >= 50 peças, senão ALTA
- *  - 7 a 14 dias: MÉDIA
- *  - mais de 14 dias: BAIXA
+ * Prioridade pelo prazo de entrega (dias restantes; atrasado conta como urgente):
+ *  - até 7 dias: URGENTE · 8 a 14: ALTA · 15 a 29: MÉDIA · 30 ou mais: BAIXA
  */
-export function computePriority(daysLeft: number, pieces: number): Priority {
-  if (daysLeft < 7) return pieces >= 50 ? 'URGENTE' : 'ALTA';
-  if (daysLeft <= 14) return 'MEDIA';
+export function computePriority(daysLeft: number): Priority {
+  if (daysLeft <= 7) return 'URGENTE';
+  if (daysLeft <= 14) return 'ALTA';
+  if (daysLeft <= 29) return 'MEDIA';
   return 'BAIXA';
-}
-
-/** P.E. = nível de prazo de entrega (1 = menos de 7 dias) */
-export function deadlineLevel(daysLeft: number): 1 | 2 | 3 {
-  return daysLeft < 7 ? 1 : daysLeft <= 14 ? 2 : 3;
 }
 
 export const PRIORITY_RANK: Record<Priority, number> = {

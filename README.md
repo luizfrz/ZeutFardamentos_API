@@ -24,7 +24,7 @@ Nada além disso é pré-cadastrado.
 
 ## Regras
 
-- **Prioridade**: menos de 7 dias → URGENTE (≥ 50 peças) ou ALTA · 7–14 dias → MÉDIA · mais de 14 → BAIXA (`src/common/priority.ts`).
+- **Prioridade**: até 7 dias → URGENTE · 8–14 → ALTA · 15–29 → MÉDIA · 30 ou mais → BAIXA (`src/common/priority.ts`).
 - **Data de entrega**: data inexistente é recusada; data passada só é aceita com `allowPastDate: true`
   (na edição, só se a data foi alterada).
 - **Molde**: só pode ser excluído se nunca foi usado em pedido e não tem variações (409 com mensagem explicando).

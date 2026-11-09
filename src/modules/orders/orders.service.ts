@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
-import { computePriority, daysUntil, deadlineLevel, isRealDate, PRIORITY_RANK } from '../../common/priority.js';
+import { computePriority, daysUntil, isRealDate, PRIORITY_RANK } from '../../common/priority.js';
 import { toClient, toDbDate, toOrder, toResponsible } from '../../common/mappers.js';
 import type { Order, OrderItem, OrderStatus, Priority } from '../../common/types.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -60,8 +60,7 @@ export class OrdersService {
       paymentStatus: o.totalValue ? (paidTotal >= o.totalValue ? 'PAGO' : 'PENDENTE') : undefined,
       totalPieces: pieces,
       daysLeft,
-      deadlineLevel: deadlineLevel(daysLeft),
-      priority: computePriority(daysLeft, pieces),
+      priority: computePriority(daysLeft),
       client: toClient(row.client),
       responsible: toResponsible(row.responsible),
     };
