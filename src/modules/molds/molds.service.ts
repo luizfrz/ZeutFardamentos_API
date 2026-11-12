@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '../../generated/prisma/client.js';
 import { toGrid, toMold } from '../../common/mappers.js';
 import type { Mold, MoldCategory, SizeGrid } from '../../common/types.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -17,6 +18,24 @@ export class MoldsService {
     return (await this.prisma.sizeGrid.findMany({ orderBy: { position: 'asc' } })).map(toGrid);
   }
 
+  /** Troca os tamanhos de uma grade. Não remove tamanho que algum pedido já usa (a tabela do pedido depende dele). */
+  async updateGrid(id: string, sizes: unknown): Promise<SizeGrid> {
+    const grid = await this.prisma.sizeGrid.findUnique({ where: { id } });
+    if (!grid) throw new NotFoundException('Grade não encontrada');
+    if (!Array.isArray(sizes) || sizes.some((s) => typeof s !== 'string')) throw new BadRequestException('Tamanhos inválidos');
+    const clean = [...new Set((sizes as string[]).map((s) => s.trim()).filter(Boolean))];
+    if (!clean.length || clean.length > 40 || clean.some((s) => s.length > 20)) {
+      throw new BadRequestException('Informe de 1 a 40 tamanhos (até 20 caracteres cada)');
+    }
+    const removed = grid.sizes.filter((s) => !clean.includes(s));
+    if (removed.length) {
+      const items = await this.prisma.orderItem.findMany({ where: { grids: { not: Prisma.DbNull } }, select: { grids: true } });
+      const used = removed.filter((size) => items.some((i) => (i.grids as { gridId: string; quantities: Record<string, number> }[]).some((g) => g.gridId === id && g.quantities[size] > 0)));
+      if (used.length) throw new ConflictException(`Já há pedidos com os tamanhos ${used.join(', ')}. Eles não podem ser removidos.`);
+    }
+    return toGrid(await this.prisma.sizeGrid.update({ where: { id }, data: { sizes: clean } }));
+  }
+
   async create(dto: CreateMoldDto): Promise<Mold> {
     const errors: string[] = [];
     const name = dto.name?.trim();
@@ -31,7 +50,7 @@ export class MoldsService {
     return toMold(await this.prisma.mold.create({
       data: {
         category: dto.category, name: name!, group: dto.group, models: dto.models ?? [], gridIds: dto.gridIds ?? [],
-        hasSizes: dto.hasSizes ?? false, variationOfId: dto.variationOfId, notes: dto.notes,
+        hasSizes: dto.hasSizes ?? false, variationOfId: dto.variationOfId, notes: dto.notes, size: dto.size?.trim() || null,
       },
     }));
   }

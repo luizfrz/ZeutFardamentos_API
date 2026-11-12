@@ -85,6 +85,7 @@ model Mold {
   hasSizes      Boolean      @default(false)
   variationOfId String?
   notes         String?
+  size          String? // dimensão (estojos e bolsas), ex.: "6 Altura x 26 Comprimento"
   createdAt     DateTime     @default(now())
 
   variationOf Mold?  @relation("MoldVariation", fields: [variationOfId], references: [id])

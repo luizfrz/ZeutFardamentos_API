@@ -55,6 +55,8 @@ export interface Mold {
   hasSizes?: boolean;
   variationOfId?: string;
   notes?: string;
+  /** Dimensão (estojos e bolsas) */
+  size?: string;
 }
 
 export interface OrderItem {
