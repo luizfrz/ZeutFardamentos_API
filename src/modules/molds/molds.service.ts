@@ -18,6 +18,21 @@ export class MoldsService {
     return (await this.prisma.sizeGrid.findMany({ orderBy: { position: 'asc' } })).map(toGrid);
   }
 
+  /** Nova categoria de tamanho (grade). O id é gerado a partir do nome. */
+  async createGrid(dto: { name?: string; description?: string; sizes?: unknown }): Promise<SizeGrid> {
+    const name = dto.name?.trim();
+    const sizes = Array.isArray(dto.sizes) ? [...new Set((dto.sizes as unknown[]).map((s) => String(s).trim()).filter(Boolean))] : [];
+    const errors: string[] = [];
+    if (!name) errors.push('Informe o nome da categoria de tamanho');
+    else if (await this.prisma.sizeGrid.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })) errors.push('Já existe uma grade com este nome');
+    if (!sizes.length || sizes.length > 40 || sizes.some((s) => s.length > 20)) errors.push('Informe de 1 a 40 tamanhos (até 20 caracteres cada)');
+    if (errors.length) throw new BadRequestException(errors);
+    const slug = name!.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30);
+    return toGrid(await this.prisma.sizeGrid.create({
+      data: { id: `g-${slug || 'grade'}-${Date.now().toString(36)}`, name: name!, description: dto.description?.trim() ?? '', sizes, position: await this.prisma.sizeGrid.count() },
+    }));
+  }
+
   /** Troca os tamanhos de uma grade. Não remove tamanho que algum pedido já usa (a tabela do pedido depende dele). */
   async updateGrid(id: string, sizes: unknown): Promise<SizeGrid> {
     const grid = await this.prisma.sizeGrid.findUnique({ where: { id } });
@@ -43,14 +58,19 @@ export class MoldsService {
     else if (await this.prisma.mold.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })) errors.push('Já existe um molde com este nome');
     if (dto.variationOfId && !(await this.prisma.mold.findUnique({ where: { id: dto.variationOfId } }))) errors.push('Modelo de origem não encontrado');
     if (dto.category === 'BLUSA') {
-      if (!dto.models?.length) errors.push('Selecione ao menos um modelo');
+      // models vazio = molde sem manga (ex.: regata)
+      if (!['CIMA', 'BAIXO', 'INTEIRO'].includes(dto.pieceType ?? '')) errors.push('Escolha o tipo de peça');
       if (!dto.gridIds?.length) errors.push('Selecione ao menos uma grade de tamanho');
+    }
+    if (dto.properties !== undefined && (!Array.isArray(dto.properties) || dto.properties.length > 30 || dto.properties.some((p) => typeof p !== 'string' || !p.trim() || p.length > 40))) {
+      errors.push('Propriedades inválidas (até 30, com até 40 caracteres cada)');
     }
     if (errors.length) throw new BadRequestException(errors);
     return toMold(await this.prisma.mold.create({
       data: {
         category: dto.category, name: name!, group: dto.group, models: dto.models ?? [], gridIds: dto.gridIds ?? [],
         hasSizes: dto.hasSizes ?? false, variationOfId: dto.variationOfId, notes: dto.notes, size: dto.size?.trim() || null,
+        pieceType: dto.category === 'BLUSA' ? dto.pieceType : null, properties: dto.category === 'BLUSA' ? [...new Set((dto.properties ?? []).map((p) => p.trim()))] : [],
       },
     }));
   }

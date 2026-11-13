@@ -85,6 +85,8 @@ model Mold {
   hasSizes      Boolean      @default(false)
   variationOfId String?
   notes         String?
+  pieceType     String? // vestuário: CIMA | BAIXO | INTEIRO
+  properties    String[] // vestuário: características padrão (ex.: "Bolso no peito")
   size          String? // dimensão (estojos e bolsas), ex.: "6 Altura x 26 Comprimento"
   createdAt     DateTime     @default(now())
 

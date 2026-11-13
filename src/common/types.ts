@@ -57,6 +57,10 @@ export interface Mold {
   notes?: string;
   /** Dimensão (estojos e bolsas) */
   size?: string;
+  /** Vestuário: CIMA | BAIXO | INTEIRO */
+  pieceType?: string;
+  /** Vestuário: características padrão */
+  properties?: string[];
 }
 
 export interface OrderItem {

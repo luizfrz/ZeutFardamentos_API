@@ -22,11 +22,12 @@ export const toGrid = (g: { id: string; name: string; description: string; sizes
 
 export const toMold = (m: {
   id: string; category: Mold['category']; name: string; group: string | null; models: string[]; gridIds: string[];
-  hasSizes: boolean; variationOfId: string | null; notes: string | null; size: string | null;
+  hasSizes: boolean; variationOfId: string | null; notes: string | null; size: string | null; pieceType: string | null; properties: string[];
 }): Mold => ({
   id: m.id, category: m.category, name: m.name, group: nn(m.group),
   models: m.models.length ? m.models : undefined, gridIds: m.gridIds.length ? m.gridIds : undefined,
-  hasSizes: m.hasSizes || undefined, variationOfId: nn(m.variationOfId), notes: nn(m.notes), size: nn(m.size),
+  hasSizes: m.hasSizes || undefined, variationOfId: nn(m.variationOfId), notes: nn(m.notes), size: nn(m.size), pieceType: nn(m.pieceType),
+  properties: m.properties.length ? m.properties : undefined,
 });
 
 export const toOrderItem = (i: {

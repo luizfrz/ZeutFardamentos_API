@@ -11,10 +11,10 @@ export function daysUntil(isoDate: string, today = new Date()): number {
 
 /**
  * Prioridade pelo prazo de entrega (dias restantes; atrasado conta como urgente):
- *  - até 7 dias: URGENTE · 8 a 14: ALTA · 15 a 29: MÉDIA · 30 ou mais: BAIXA
+ *  - até 5 dias: URGENTE · 6 a 14: ALTA · 15 a 29: MÉDIA · 30 ou mais: BAIXA
  */
 export function computePriority(daysLeft: number): Priority {
-  if (daysLeft <= 7) return 'URGENTE';
+  if (daysLeft <= 5) return 'URGENTE';
   if (daysLeft <= 14) return 'ALTA';
   if (daysLeft <= 29) return 'MEDIA';
   return 'BAIXA';

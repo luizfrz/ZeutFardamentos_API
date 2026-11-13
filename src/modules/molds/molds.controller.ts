@@ -8,5 +8,6 @@ export class MoldsController {
   @Post('molds') create(@Body() dto: CreateMoldDto) { return this.service.create(dto); }
   @Delete('molds/:id') remove(@Param('id') id: string) { return this.service.remove(id); }
   @Get('size-grids') grids() { return this.service.grids(); }
+  @Post('size-grids') createGrid(@Body() dto: { name?: string; description?: string; sizes?: unknown }) { return this.service.createGrid(dto); }
   @Patch('size-grids/:id') updateGrid(@Param('id') id: string, @Body('sizes') sizes: unknown) { return this.service.updateGrid(id, sizes); }
 }
