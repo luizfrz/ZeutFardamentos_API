@@ -102,7 +102,7 @@ model Order {
   description   String?
   clientId      String
   responsibleId String
-  deliveryDate  DateTime    @db.Date
+  deliveryDate  DateTime?   @db.Date
   status        OrderStatus @default(NAO_INICIADO)
   createdAt     DateTime    @default(now())
   deliveredAt   DateTime?   @db.Date

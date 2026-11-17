@@ -43,6 +43,8 @@ const isBlobUrl = (u: unknown): boolean => {
   }
 };
 
+const NO_DEADLINE_DAYS = 9999;
+
 @Injectable()
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -50,7 +52,8 @@ export class OrdersService {
   private view(row: OrderRow) {
     const o = toOrder(row);
     const pieces = o.items.reduce((s, i) => s + itemPieces(i), 0);
-    const daysLeft = daysUntil(o.deliveryDate);
+    // shortcut: sem prazo vira 9999 dias (BAIXA, nunca atrasado); trocar por daysLeft nulo se a UI precisar distinguir
+    const daysLeft = o.deliveryDate ? daysUntil(o.deliveryDate) : NO_DEADLINE_DAYS;
     const payments = row.payments.map((p) => ({ id: p.id, amount: p.amount, paidAt: p.paidAt.toISOString().slice(0, 10) }));
     const paidTotal = payments.reduce((s, p) => s + p.amount, 0);
     return {
@@ -123,10 +126,11 @@ export class OrdersService {
     if (!dto.name?.trim()) errors.push('Campo obrigatório: dê um nome para identificar o pedido');
     if (!dto.clientId || !(await this.prisma.client.count({ where: { id: dto.clientId } }))) errors.push('Cliente vinculado é obrigatório');
     if (!dto.responsibleId || !(await this.prisma.responsible.count({ where: { id: dto.responsibleId } }))) errors.push('Responsável vinculado é obrigatório');
-    if (!dto.deliveryDate) errors.push('Data de entrega é obrigatória');
-    else if (!isRealDate(dto.deliveryDate)) errors.push('Data de entrega inválida');
-    else if (checkPast && daysUntil(dto.deliveryDate) < 0) {
-      errors.push('A data de entrega já passou. Confirme o cadastro para registrar uma data no passado.');
+    if (dto.deliveryDate) {
+      if (!isRealDate(dto.deliveryDate)) errors.push('Data de entrega inválida');
+      else if (checkPast && daysUntil(dto.deliveryDate) < 0) {
+        errors.push('A data de entrega já passou. Confirme o cadastro para registrar uma data no passado.');
+      }
     }
     if (!dto.items?.length || dto.items.reduce((s, i) => s + itemPieces(i), 0) <= 0) errors.push('Adicione ao menos um produto com quantidade');
     const moldIds = [...new Set((dto.items ?? []).map((i) => i.moldId))];
@@ -153,7 +157,7 @@ export class OrdersService {
     const created = await this.prisma.order.create({
       data: {
         name: dto.name.trim(), description: dto.description, clientId: dto.clientId, responsibleId: dto.responsibleId,
-        deliveryDate: toDbDate(dto.deliveryDate), links: (dto.links ?? []) as unknown as Prisma.InputJsonValue, images: dto.images ?? [], totalValue: dto.totalValue ?? null,
+        deliveryDate: dto.deliveryDate ? toDbDate(dto.deliveryDate) : null, links: (dto.links ?? []) as unknown as Prisma.InputJsonValue, images: dto.images ?? [], totalValue: dto.totalValue ?? null,
         items: { create: this.itemsData(dto.items) },
       },
       include,
@@ -178,7 +182,7 @@ export class OrdersService {
         where: { id },
         data: {
           name: changes.name?.trim(), description: changes.description, clientId: changes.clientId, responsibleId: changes.responsibleId,
-          deliveryDate: changes.deliveryDate ? toDbDate(changes.deliveryDate) : undefined,
+          deliveryDate: changes.deliveryDate === undefined ? undefined : changes.deliveryDate ? toDbDate(changes.deliveryDate) : null,
           links: changes.links ? (changes.links as unknown as Prisma.InputJsonValue) : undefined, images: changes.images, totalValue: changes.totalValue,
         },
         include,

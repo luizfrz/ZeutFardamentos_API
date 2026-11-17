@@ -81,7 +81,7 @@ export interface Order {
   description?: string;
   clientId: string;
   responsibleId: string;
-  deliveryDate: string; // ISO yyyy-mm-dd
+  deliveryDate?: string; // ISO yyyy-mm-dd; opcional (sem prazo)
   status: OrderStatus;
   createdAt: string;
   deliveredAt?: string;
