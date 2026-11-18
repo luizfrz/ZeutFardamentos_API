@@ -3,9 +3,9 @@ import type { PrismaClient } from '../generated/prisma/client.js';
 /** Grades de tamanho e moldes iniciais usados pelos formulários. */
 const GRIDS = [
   { id: 'g-infantil', name: 'Infantil', description: '2 a 16 anos', sizes: ['2', '4', '6', '8', '10', '12', '14', '16'] },
-  { id: 'g-babylook', name: 'Babylook', description: 'PP ao XGG baby look', sizes: ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XGG'] },
+  { id: 'g-babylook', name: 'Babylook', description: 'PP ao GG baby look', sizes: ['PP', 'P', 'M', 'G', 'GG'] },
   { id: 'g-plus', name: 'Plus Size', description: '2 tamanhos', sizes: ['Plus I', 'Plus II'] },
-  { id: 'g-unissex', name: 'Unissex', description: 'PP ao Extra XGG', sizes: ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XGG', 'EXG'] },
+  { id: 'g-unissex', name: 'Unissex', description: 'PP ao GG', sizes: ['PP', 'P', 'M', 'G', 'GG'] },
 ];
 
 const MOLDS = [
