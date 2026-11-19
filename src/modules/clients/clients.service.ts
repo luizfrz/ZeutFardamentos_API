@@ -36,7 +36,7 @@ export class ClientsService {
     return toClient(c);
   }
 
-  async create(dto: CreateClientDto): Promise<Client> {
+  private async validate(dto: CreateClientDto, selfId?: string) {
     const errors: string[] = [];
     if (!dto.name?.trim()) errors.push('Nome / Razão social é obrigatório');
     const doc = normalizeDocument(dto.document ?? '');
@@ -47,11 +47,16 @@ export class ClientsService {
     } else if (!isValidCnpj(doc)) {
       errors.push('CNPJ inválido: os dígitos verificadores não conferem');
     }
-    if (doc && (await this.prisma.client.findUnique({ where: { document: doc } }))) errors.push('Já existe um cliente com este documento');
+    const same = doc ? await this.prisma.client.findUnique({ where: { document: doc } }) : null;
+    if (same && same.id !== selfId) errors.push('Já existe um cliente com este documento');
     if (!dto.contacts?.length || dto.contacts.some((c) => !c.value?.trim())) errors.push('Informe pelo menos uma forma de contato');
     if (dto.contacts?.some((c) => c.ownerName !== undefined && !c.ownerName.trim())) errors.push('Informe a quem pertence o contato');
     if (errors.length) throw new BadRequestException(errors);
+    return doc;
+  }
 
+  async create(dto: CreateClientDto): Promise<Client> {
+    const doc = await this.validate(dto);
     const created = await this.prisma.client.create({
       data: {
         type: dto.type, name: dto.name.trim(), document: doc || null,
@@ -65,6 +70,30 @@ export class ClientsService {
       include,
     });
     return toClient(created);
+  }
+
+  /** Substitui os dados do cliente (inclusive contatos e endereço). */
+  async update(id: string, dto: CreateClientDto): Promise<Client> {
+    if (!(await this.prisma.client.count({ where: { id } }))) throw new NotFoundException('Cliente não encontrado');
+    const doc = await this.validate(dto, id);
+    const filled = dto.address && Object.values(dto.address).some((v) => typeof v === 'string' && v.trim());
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.contact.deleteMany({ where: { clientId: id } });
+      return tx.client.update({
+        where: { id },
+        data: {
+          type: dto.type, name: dto.name.trim(), document: doc || null,
+          address: filled ? { ...dto.address } : Prisma.DbNull,
+          contacts: {
+            create: dto.contacts.map((c, position) => ({
+              kind: c.kind, value: c.value.trim(), ownerName: c.ownerName?.trim(), ownerDocument: c.ownerDocument, position,
+            })),
+          },
+        },
+        include,
+      });
+    });
+    return toClient(updated);
   }
 
   /** Endereço é opcional: sem `address` (ou vazio), o endereço é removido. */
