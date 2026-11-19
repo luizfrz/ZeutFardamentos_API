@@ -214,6 +214,13 @@ export class OrdersService {
     return this.get(id);
   }
 
+  /** Itens e pagamentos saem junto (cascade); cliente e responsável permanecem. */
+  async remove(id: string) {
+    const { count } = await this.prisma.order.deleteMany({ where: { id } });
+    if (!count) throw new NotFoundException('Pedido não encontrado');
+    return { id };
+  }
+
   async removePayment(id: string, paymentId: string) {
     const { count } = await this.prisma.payment.deleteMany({ where: { id: paymentId, orderId: id } });
     if (!count) throw new NotFoundException('Pagamento não encontrado');
