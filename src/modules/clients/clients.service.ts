@@ -15,6 +15,8 @@ export interface CreateClientDto {
 }
 
 const include = { contacts: { orderBy: { position: 'asc' as const } } };
+// A lista também traz os nomes dos pedidos vinculados (usados no aviso de exclusão).
+const includeOrders = { ...include, orders: { select: { id: true, name: true }, orderBy: { createdAt: 'desc' as const } } };
 
 @Injectable()
 export class ClientsService {
@@ -24,10 +26,10 @@ export class ClientsService {
     const digits = q ? normalizeDocument(q) : '';
     const rows = await this.prisma.client.findMany({
       where: q ? { OR: [{ name: { contains: q, mode: 'insensitive' } }, ...(digits ? [{ document: { contains: digits } }] : [])] } : undefined,
-      include,
+      include: includeOrders,
       orderBy: { name: 'asc' },
     });
-    return rows.map(toClient);
+    return rows.map((r) => ({ ...toClient(r), orders: r.orders }));
   }
 
   async get(id: string): Promise<Client> {
@@ -94,6 +96,15 @@ export class ClientsService {
       });
     });
     return toClient(updated);
+  }
+
+  /** Cliente com pedidos não pode ser apagado (Restrict no banco); os contatos saem junto. */
+  async remove(id: string) {
+    if (!(await this.prisma.client.count({ where: { id } }))) throw new NotFoundException('Cliente não encontrado');
+    const orders = await this.prisma.order.findMany({ where: { clientId: id }, select: { name: true } });
+    if (orders.length) throw new BadRequestException(`Este cliente tem ${orders.length === 1 ? 'um pedido vinculado' : 'pedidos vinculados'}: ${orders.map((o) => o.name).join(', ')}. Exclua ${orders.length === 1 ? 'o pedido' : 'os pedidos'} antes de apagar o cliente.`);
+    await this.prisma.client.delete({ where: { id } });
+    return { id };
   }
 
   /** Endereço é opcional: sem `address` (ou vazio), o endereço é removido. */
