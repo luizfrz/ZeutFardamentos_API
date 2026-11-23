@@ -16,7 +16,8 @@ export interface CreateClientDto {
 
 const include = { contacts: { orderBy: { position: 'asc' as const } } };
 // A lista também traz os nomes dos pedidos vinculados (usados no aviso de exclusão).
-const includeOrders = { ...include, orders: { select: { id: true, name: true }, orderBy: { createdAt: 'desc' as const } } };
+const orderRef = { select: { id: true, name: true }, orderBy: { createdAt: 'desc' as const } };
+const includeOrders = { ...include, orders: orderRef, extraOrders: orderRef };
 
 @Injectable()
 export class ClientsService {
@@ -29,7 +30,7 @@ export class ClientsService {
       include: includeOrders,
       orderBy: { name: 'asc' },
     });
-    return rows.map((r) => ({ ...toClient(r), orders: r.orders }));
+    return rows.map(({ orders, extraOrders, ...r }) => ({ ...toClient(r), orders: [...orders, ...extraOrders] }));
   }
 
   async get(id: string): Promise<Client> {
@@ -101,7 +102,7 @@ export class ClientsService {
   /** Cliente com pedidos não pode ser apagado (Restrict no banco); os contatos saem junto. */
   async remove(id: string) {
     if (!(await this.prisma.client.count({ where: { id } }))) throw new NotFoundException('Cliente não encontrado');
-    const orders = await this.prisma.order.findMany({ where: { clientId: id }, select: { name: true } });
+    const orders = await this.prisma.order.findMany({ where: { OR: [{ clientId: id }, { extraClients: { some: { id } } }] }, select: { name: true } });
     if (orders.length) throw new BadRequestException(`Este cliente tem ${orders.length === 1 ? 'um pedido vinculado' : 'pedidos vinculados'}: ${orders.map((o) => o.name).join(', ')}. Exclua ${orders.length === 1 ? 'o pedido' : 'os pedidos'} antes de apagar o cliente.`);
     await this.prisma.client.delete({ where: { id } });
     return { id };

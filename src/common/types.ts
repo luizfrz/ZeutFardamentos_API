@@ -79,6 +79,7 @@ export interface Order {
   number: number;
   name: string;
   description?: string;
+  /** Cliente e responsável principais; os demais vínculos vêm em clientIds/responsibleIds (o principal é o primeiro). */
   clientId: string;
   responsibleId: string;
   deliveryDate?: string; // ISO yyyy-mm-dd; opcional (sem prazo)

@@ -13,8 +13,13 @@ export interface OrderQuery {
   sort?: 'priority' | 'deadline' | 'quantity';
 }
 
-export type OrderInput = Omit<Order, 'id' | 'number' | 'createdAt' | 'status' | 'deliveredAt' | 'stages'> & {
+export type OrderInput = Omit<Order, 'id' | 'number' | 'createdAt' | 'status' | 'deliveredAt' | 'stages' | 'clientId' | 'responsibleId'> & {
   status?: OrderStatus;
+  /** Vínculos: o primeiro é o principal. `clientId`/`responsibleId` (um só) continuam aceitos. */
+  clientIds?: string[];
+  responsibleIds?: string[];
+  clientId?: string;
+  responsibleId?: string;
   /** Confirmação explícita de que a data de entrega pode estar no passado. */
   allowPastDate?: boolean;
 };
@@ -22,11 +27,14 @@ export type OrderInput = Omit<Order, 'id' | 'number' | 'createdAt' | 'status' | 
 export const itemPieces = (i: OrderItem) =>
   i.grids ? i.grids.reduce((s, g) => s + Object.values(g.quantities).reduce((a, b) => a + (b || 0), 0), 0) : (i.quantity ?? 0);
 
+const contacts = { contacts: { orderBy: { position: 'asc' as const } } };
 const include = {
   items: { orderBy: { position: 'asc' as const } },
   payments: { orderBy: [{ paidAt: 'asc' as const }, { createdAt: 'asc' as const }] },
-  client: { include: { contacts: { orderBy: { position: 'asc' as const } } } },
+  client: { include: contacts },
+  extraClients: { include: contacts },
   responsible: true,
+  extraResponsibles: true,
 };
 type OrderRow = Prisma.OrderGetPayload<{ include: typeof include }>;
 
@@ -47,6 +55,12 @@ const isBlobUrl = (u: unknown): boolean => {
 export const STAGES = ['ARQUIVO', 'ENVIO_IMPRESSAO', 'IMPRESSAO', 'CORTE', 'COSTURA', 'EMPACOTADO', 'ENTREGUE'];
 
 const NO_DEADLINE_DAYS = 9999;
+
+/** Normaliza os vínculos: aceita listas ou um id só, sem repetidos. */
+const links = (d: Partial<OrderInput>) => ({
+  clientIds: [...new Set(d.clientIds?.length ? d.clientIds : d.clientId ? [d.clientId] : [])],
+  responsibleIds: [...new Set(d.responsibleIds?.length ? d.responsibleIds : d.responsibleId ? [d.responsibleId] : [])],
+});
 
 @Injectable()
 export class OrdersService {
@@ -69,6 +83,8 @@ export class OrdersService {
       priority: computePriority(daysLeft),
       client: toClient(row.client),
       responsible: toResponsible(row.responsible),
+      clients: [row.client, ...row.extraClients].map(toClient),
+      responsibles: [row.responsible, ...row.extraResponsibles].map(toResponsible),
     };
   }
 
@@ -91,9 +107,8 @@ export class OrdersService {
         (o) =>
           o.name.toLowerCase().includes(t) ||
           `#${o.number}`.includes(t) ||
-          o.client.name.toLowerCase().includes(t) ||
-          o.responsible.name.toLowerCase().includes(t) ||
-          (d && (o.client.document?.includes(d) || o.responsible.cpf?.includes(d))),
+          o.clients.some((c) => c.name.toLowerCase().includes(t) || (d && c.document?.includes(d))) ||
+          o.responsibles.some((r) => r.name.toLowerCase().includes(t) || (d && r.cpf?.includes(d))),
       );
     }
     const sort = query.sort ?? 'priority';
@@ -127,8 +142,9 @@ export class OrdersService {
   private async validate(dto: Partial<OrderInput>, checkPast: boolean) {
     const errors: string[] = [];
     if (!dto.name?.trim()) errors.push('Campo obrigatório: dê um nome para identificar o pedido');
-    if (!dto.clientId || !(await this.prisma.client.count({ where: { id: dto.clientId } }))) errors.push('Cliente vinculado é obrigatório');
-    if (!dto.responsibleId || !(await this.prisma.responsible.count({ where: { id: dto.responsibleId } }))) errors.push('Responsável vinculado é obrigatório');
+    const { clientIds, responsibleIds } = links(dto);
+    if (!clientIds.length || (await this.prisma.client.count({ where: { id: { in: clientIds } } })) !== clientIds.length) errors.push('Cliente vinculado é obrigatório');
+    if (!responsibleIds.length || (await this.prisma.responsible.count({ where: { id: { in: responsibleIds } } })) !== responsibleIds.length) errors.push('Responsável vinculado é obrigatório');
     if (dto.deliveryDate) {
       if (!isRealDate(dto.deliveryDate)) errors.push('Data de entrega inválida');
       else if (checkPast && daysUntil(dto.deliveryDate) < 0) {
@@ -148,6 +164,16 @@ export class OrdersService {
     if (errors.length) throw new BadRequestException(errors);
   }
 
+  /** Principal nas colunas do pedido; os demais na tabela de vínculos extras. */
+  private linksData(dto: Partial<OrderInput>, op: 'set' | 'connect') {
+    const { clientIds, responsibleIds } = links(dto);
+    return {
+      clientId: clientIds[0], responsibleId: responsibleIds[0],
+      extraClients: { [op]: clientIds.slice(1).map((id) => ({ id })) },
+      extraResponsibles: { [op]: responsibleIds.slice(1).map((id) => ({ id })) },
+    };
+  }
+
   private itemsData(items: OrderItem[]) {
     return items.map((i, position) => ({
       moldId: i.moldId, model: i.model, color: i.color, quantity: i.quantity, position,
@@ -159,7 +185,7 @@ export class OrdersService {
     await this.validate(dto, !dto.allowPastDate);
     const created = await this.prisma.order.create({
       data: {
-        name: dto.name.trim(), description: dto.description, clientId: dto.clientId, responsibleId: dto.responsibleId,
+        name: dto.name.trim(), description: dto.description, ...this.linksData(dto, 'connect'),
         deliveryDate: dto.deliveryDate ? toDbDate(dto.deliveryDate) : null, links: (dto.links ?? []) as unknown as Prisma.InputJsonValue, images: dto.images ?? [], totalValue: dto.totalValue ?? null,
         items: { create: this.itemsData(dto.items) },
       },
@@ -173,8 +199,13 @@ export class OrdersService {
     if (!current) throw new NotFoundException('Pedido não encontrado');
     const { allowPastDate, ...changes } = dto;
     const base = toOrder(current);
+    const touchesLinks = ['clientId', 'clientIds', 'responsibleId', 'responsibleIds'].some((k) => k in changes);
     const dateChanged = changes.deliveryDate !== undefined && changes.deliveryDate !== base.deliveryDate;
-    await this.validate({ ...base, ...changes }, dateChanged && !allowPastDate);
+    const merged: Partial<OrderInput> = { ...base, ...changes };
+    // Quem manda só `clientId` (um só) substitui a lista inteira; sem nenhum dos dois, os vínculos atuais ficam.
+    if (changes.clientId && !changes.clientIds) merged.clientIds = undefined;
+    if (changes.responsibleId && !changes.responsibleIds) merged.responsibleIds = undefined;
+    await this.validate(merged, dateChanged && !allowPastDate);
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (changes.items) {
@@ -184,7 +215,7 @@ export class OrdersService {
       return tx.order.update({
         where: { id },
         data: {
-          name: changes.name?.trim(), description: changes.description, clientId: changes.clientId, responsibleId: changes.responsibleId,
+          name: changes.name?.trim(), description: changes.description, ...(touchesLinks ? this.linksData(merged, 'set') : {}),
           deliveryDate: changes.deliveryDate === undefined ? undefined : changes.deliveryDate ? toDbDate(changes.deliveryDate) : null,
           links: changes.links ? (changes.links as unknown as Prisma.InputJsonValue) : undefined, images: changes.images, totalValue: changes.totalValue,
         },

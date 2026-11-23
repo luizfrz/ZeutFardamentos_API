@@ -39,8 +39,10 @@ model Client {
   address   Json?
   createdAt DateTime   @default(now())
 
-  contacts Contact[]
-  orders   Order[]
+  contacts    Contact[]
+  orders      Order[]
+  // Clientes adicionais de pedidos (o principal fica em Order.clientId)
+  extraOrders Order[]   @relation("OrderExtraClients")
 }
 
 model Contact {
@@ -64,7 +66,8 @@ model Responsible {
   phone     String
   createdAt DateTime @default(now())
 
-  orders Order[]
+  orders      Order[]
+  extraOrders Order[] @relation("OrderExtraResponsibles")
 }
 
 model SizeGrid {
@@ -90,8 +93,8 @@ model Mold {
   size          String? // dimensão (estojos e bolsas), ex.: "6 Altura x 26 Comprimento"
   createdAt     DateTime     @default(now())
 
-  variationOf Mold?  @relation("MoldVariation", fields: [variationOfId], references: [id])
-  variations  Mold[] @relation("MoldVariation")
+  variationOf Mold?       @relation("MoldVariation", fields: [variationOfId], references: [id])
+  variations  Mold[]      @relation("MoldVariation")
   items       OrderItem[]
 }
 
@@ -112,10 +115,13 @@ model Order {
   stages        String[] // etapas de produção concluídas (chaves de STAGES); opcional
 
   // Restrict: apagar um pedido nunca apaga o cliente, e um cliente com pedidos não pode ser apagado.
-  client      Client      @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  responsible Responsible @relation(fields: [responsibleId], references: [id], onDelete: Restrict)
-  items       OrderItem[]
-  payments    Payment[]
+  client            Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  responsible       Responsible   @relation(fields: [responsibleId], references: [id], onDelete: Restrict)
+  // Vínculos adicionais (N:N): o primeiro cliente/responsável é o principal, nas colunas acima
+  extraClients      Client[]      @relation("OrderExtraClients")
+  extraResponsibles Responsible[] @relation("OrderExtraResponsibles")
+  items             OrderItem[]
+  payments          Payment[]
 
   @@index([status, deliveryDate])
   @@index([clientId])
