@@ -22,17 +22,6 @@ Nada além disso é pré-cadastrado.
 `GET/POST /orders` · `GET /orders/summary` · `GET/PATCH /orders/:id` · `PATCH /orders/:id/status`
 `GET/POST /clients` · `GET/POST /responsibles` · `GET/POST /molds` · `DELETE /molds/:id` · `GET /size-grids`
 
-## Regras
-
-- **Prioridade**: até 5 dias → URGENTE · 6–14 → ALTA · 15–29 → MÉDIA · 30 ou mais → BAIXA (`src/common/priority.ts`).
-- **Data de entrega**: data inexistente é recusada; data passada só é aceita com `allowPastDate: true`
-  (na edição, só se a data foi alterada).
-- **Molde**: só pode ser excluído se nunca foi usado em pedido e não tem variações (409 com mensagem explicando).
-- **Cliente**: ao menos uma forma de contato. **CNPJ** (empresa/órgão público) é obrigatório, válido e único; **CPF** (pessoa física) é opcional, mas se informado precisa ser válido e único.
-- **Responsável**: nome e telefone com DDD obrigatórios; **CPF opcional** (se informado, válido e único).
-- **Dados preservados**: pedido referencia cliente e responsável com `ON DELETE RESTRICT` — concluir ou alterar um
-  pedido nunca remove o cliente, e o banco impede apagar um cliente que já tem pedido.
-
 ## Estrutura
 
 ```
@@ -49,83 +38,3 @@ src/
     └── molds/                moldes e grades de tamanho
 prisma/                       schema.prisma + migrations
 ```
-
-Scripts de banco: `db:migrate` (dev), `db:deploy`, `db:studio`, `db:reset`.
-
-## Deploy na Vercel
-
-A API roda na Vercel como **uma função serverless** (`api/index.js` → `dist/serverless.js`), configurada em `vercel.json`
-(framework *Other*, `buildCommand: yarn build`, região `gru1`, todas as rotas reescritas para a função). O Nest é iniciado uma vez
-por instância e reaproveitado. O banco precisa ser um PostgreSQL externo — o container local não existe lá.
-
-1. **Banco (Neon)**: no painel da Vercel, *Storage → Neon (Marketplace)*, ou em neon.com → *New Project* (região próxima de você,
-   ex.: *São Paulo*). Em *Connect* copie **duas** URLs: a **com pooler** (host com `-pooler`) e a **direta**.
-   Antes de ir para a Vercel, confirme que as duas funcionam e crie o schema, direto da sua máquina:
-   ```bash
-   DATABASE_URL='<url com pooler>' DIRECT_DATABASE_URL='<url direta>' yarn db:check   # testa a conexão (não imprime senha)
-   DIRECT_DATABASE_URL='<url direta>' yarn db:deploy                                  # cria as tabelas
-   ```
-   No plano gratuito o Neon suspende o banco quando ocioso: o primeiro acesso depois de um tempo pode levar alguns segundos.
-2. **Projeto**: *Add New → Project* → importe este repositório (preset *NestJS*, detectado sozinho).
-3. **Não sobrescreva** *Build Command*, *Output Directory* nem *Install Command* no painel: o `vercel.json` já define tudo.
-   As migrations **não** rodam no build — veja o passo 1 (`yarn db:migrate:neon` da sua máquina, a cada migration nova).
-4. **Variáveis de ambiente**:
-   - `DATABASE_URL` = URL com pooler (`?sslmode=require`)
-   - `DIRECT_DATABASE_URL` = URL direta (só para as migrations)
-   - `WEB_ORIGIN` = URL do front (várias separadas por vírgula)
-   - `DB_POOL_MAX` = `5` (opcional)
-5. **Conferir**: `https://SEU-PROJETO-API.vercel.app/api/ping` (não usa banco) deve responder `{"ok":true,…}` e
-   `/api/health` deve responder `{"status":"ok"}`. Se o banco falhar, `/api/health` devolve 503 com `reason` (`DATABASE_URL_MISSING`,
-   `DB_AUTH_FAILED`, `DB_UNREACHABLE`) e o log da função mostra a causa.
-
-**Usando Supabase em vez do Neon** (também é só um PostgreSQL para a API; o NestJS continua rodando na Vercel):
-
-| Variável | Valor (painel do Supabase → *Connect*) |
-|---|---|
-| `DATABASE_URL` | *Transaction pooler* (porta **6543**) |
-| `DIRECT_DATABASE_URL` | *Session pooler* (porta **5432**) — a conexão "direct" só tem IPv6 sem o add-on de IPv4 |
-
-Troque `[YOUR-PASSWORD]` pela senha do banco. Não testado contra um projeto Supabase real.
-
-Em serverless cada instância segura poucas conexões (`DB_POOL_MAX`) e o pool é registrado com `attachDatabasePool`
-(`@vercel/functions`) para liberar conexões quando a função é suspensa — por isso a URL do pooler é obrigatória.
-
-## Autenticação
-
-Toda rota exige login (`Authorization: Bearer <JWT>`), exceto `/auth/login`, `/health` e `/ping`. **Não há cadastro público:** só um
-**administrador** cria contas (tela *Usuários* do site ou `POST /users`). Senhas com `scrypt` (sal por usuário); sessão = JWT HS256 de 7 dias
-assinado com `JWT_SECRET` (mín. 32 caracteres; sem ele a API recusa tudo com 503 `AUTH_NOT_CONFIGURED`). E-mail inexistente e senha errada
-dão a mesma mensagem, no mesmo tempo.
-
-| Papel | Pode |
-|---|---|
-| `USER` | Usar o sistema (clientes, responsáveis, pedidos, moldes) |
-| `ADMIN` | Tudo isso + `GET/POST/PATCH/DELETE /users` (criar, redefinir senha, mudar papel, excluir). O papel é conferido **no banco** a cada chamada, não só no token. |
-
-Proteções: não dá para excluir a própria conta nem rebaixar/excluir o último administrador.
-
-| Variável | Para quê |
-|---|---|
-| `JWT_SECRET` | Segredo que assina as sessões. Gere: `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
-
-### Primeiro administrador
-`yarn build && yarn user:admin` (banco local) ou `yarn user:admin:neon` (produção) cria o admin com e-mail e senha do arquivo `.env.admin`
-(gerado, modo 600, ignorado pelo git — **apague depois de trocar a senha** em *Usuários → Redefinir senha*). Para outro usuário:
-`yarn user:create [--admin] [--reset]` (interativo; a senha não aparece na tela).
-
-- **Limite de tentativas**: 5 erros por IP+e-mail a cada 15 min no login (em memória, por instância).
-- **Migrations** (`add_users`, `add_user_role`, `optional_cpf`): em produção rode `yarn db:migrate:neon` **antes** de publicar a API.
-- Ordem de publicação: migration → primeiro admin → `JWT_SECRET` na Vercel → API → front.
-
-## Solução de problemas
-
-**`ECONNREFUSED` ao iniciar / front mostra "Não foi possível carregar os dados"** — o PostgreSQL não está rodando.
-Com podman/docker rootless o container para quando a sessão termina e **não** volta sozinho:
-
-```bash
-docker start zeut-db        # ou: docker compose up -d
-```
-
-A API tenta reconectar por ~30 s (avisando no log) e inicia sozinha assim que o banco responde; os dados ficam no
-volume `zeut_gestao_api_zeut-pgdata` e não se perdem. Se o banco estiver em outro host/porta, ajuste `DATABASE_URL` no `.env`.
-
