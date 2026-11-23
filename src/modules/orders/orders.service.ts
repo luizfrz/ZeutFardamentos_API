@@ -13,7 +13,7 @@ export interface OrderQuery {
   sort?: 'priority' | 'deadline' | 'quantity';
 }
 
-export type OrderInput = Omit<Order, 'id' | 'number' | 'createdAt' | 'status' | 'deliveredAt'> & {
+export type OrderInput = Omit<Order, 'id' | 'number' | 'createdAt' | 'status' | 'deliveredAt' | 'stages'> & {
   status?: OrderStatus;
   /** Confirmação explícita de que a data de entrega pode estar no passado. */
   allowPastDate?: boolean;
@@ -42,6 +42,9 @@ const isBlobUrl = (u: unknown): boolean => {
     return false;
   }
 };
+
+/** Etapas de produção, na ordem. */
+export const STAGES = ['ARQUIVO', 'ENVIO_IMPRESSAO', 'IMPRESSAO', 'CORTE', 'COSTURA', 'EMPACOTADO', 'ENTREGUE'];
 
 const NO_DEADLINE_DAYS = 9999;
 
@@ -195,8 +198,15 @@ export class OrdersService {
     if (!['NAO_INICIADO', 'PENDENTE', 'CONCLUIDO'].includes(status)) throw new BadRequestException('Status inválido');
     if (!(await this.prisma.order.count({ where: { id } }))) throw new NotFoundException('Pedido não encontrado');
     const o = await this.prisma.order.update({
-      where: { id }, data: { status, deliveredAt: status === 'CONCLUIDO' ? today() : null }, include,
+      where: { id }, data: { status, deliveredAt: status === 'CONCLUIDO' ? today() : null, ...(status === 'CONCLUIDO' ? { stages: STAGES } : {}) }, include, // concluir preenche todas as etapas
     });
+    return this.view(o);
+  }
+
+  async setStages(id: string, stages: string[]) {
+    if (!Array.isArray(stages) || !stages.every((s) => STAGES.includes(s))) throw new BadRequestException('Etapa inválida');
+    if (!(await this.prisma.order.count({ where: { id } }))) throw new NotFoundException('Pedido não encontrado');
+    const o = await this.prisma.order.update({ where: { id }, data: { stages: STAGES.filter((s) => stages.includes(s)) }, include });
     return this.view(o);
   }
 

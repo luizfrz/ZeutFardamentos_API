@@ -88,6 +88,7 @@ export interface Order {
   items: OrderItem[];
   links: { label?: string; url: string }[];
   images: string[];
+  stages: string[];
   /** Centavos */
   totalValue?: number;
 }
