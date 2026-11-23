@@ -109,7 +109,6 @@ model Order {
   links         Json        @default("[]")
   images        String[]
   totalValue    Int? // em centavos; opcional
-  stages        String[] // etapas de produção concluídas (chaves de STAGES); opcional
 
   // Restrict: apagar um pedido nunca apaga o cliente, e um cliente com pedidos não pode ser apagado.
   client      Client      @relation(fields: [clientId], references: [id], onDelete: Restrict)
