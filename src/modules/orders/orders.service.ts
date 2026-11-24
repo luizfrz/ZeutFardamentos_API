@@ -52,7 +52,7 @@ const isBlobUrl = (u: unknown): boolean => {
 };
 
 /** Etapas de produção, na ordem. */
-export const STAGES = ['ARQUIVO', 'ENVIO_IMPRESSAO', 'IMPRESSAO', 'CORTE', 'COSTURA', 'EMPACOTADO', 'ENTREGUE'];
+export const STAGES = ['ARQUIVO', 'ENVIO_IMPRESSAO', 'IMPRESSAO', 'SUBLIMADO', 'CORTE', 'COSTURA', 'EMPACOTADO', 'ENTREGUE'];
 
 const NO_DEADLINE_DAYS = 9999;
 
